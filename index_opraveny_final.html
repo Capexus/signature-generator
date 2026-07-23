@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAPEXUS – Generátor e-mailového podpisu</title>
+  <style>
+    :root {
+      --capexus-blue: #00ABC8;
+      --text: #222222;
+      --muted: #6f7780;
+      --border: #d9dee3;
+      --background: #f4f7f9;
+      --white: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px;
+      background: var(--background);
+      color: var(--text);
+      font-family: Aptos, Calibri, Arial, sans-serif;
+    }
+    .app { max-width: 1180px; margin: 0 auto; }
+    .header { margin-bottom: 24px; }
+    .header h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.15; font-weight: 700; }
+    .header p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(28, 44, 58, 0.06);
+    }
+    .form-card { padding: 24px; }
+    .preview-card { overflow: hidden; }
+    .card-title { margin: 0 0 18px; font-size: 18px; font-weight: 700; }
+    .field { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 600; }
+    input, select {
+      width: 100%;
+      height: 44px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus {
+      border-color: var(--capexus-blue);
+      box-shadow: 0 0 0 3px rgba(0, 171, 200, 0.12);
+    }
+    .help { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .actions { display: grid; gap: 10px; margin-top: 24px; }
+    button {
+      min-height: 46px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .primary { background: var(--capexus-blue); color: #fff; }
+    .secondary { background: #edf3f5; color: #16313a; }
+    .status { min-height: 20px; margin-top: 12px; font-size: 13px; line-height: 1.4; }
+    .status.error { color: #b42318; }
+    .status.success { color: #18794e; }
+    .preview-head { padding: 18px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; }
+    .preview-wrap { padding: 12px; background: #eef2f4; }
+    iframe { display: block; width: 100%; min-height: 720px; border: 0; border-radius: 8px; background: #fff; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      iframe { min-height: 760px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1>Generátor e-mailového podpisu</h1>
+      <p>Vyplňte své údaje, zkontrolujte náhled a stáhněte hotový soubor ve formátu HTM.</p>
+    </header>
+
+    <section class="layout">
+      <div class="card form-card">
+        <h2 class="card-title">Údaje zaměstnance</h2>
+
+        <form id="signatureForm" novalidate>
+          <div class="field">
+            <label for="displayName">Jméno a titul</label>
+            <input id="displayName" type="text" placeholder="Např. Ing. Michaela Bursíková" autocomplete="name" required>
+            <div class="help">Tituly uvádějte přímo před nebo za jménem.</div>
+          </div>
+
+          <div class="field">
+            <label for="jobTitle">Pozice</label>
+            <input id="jobTitle" type="text" placeholder="Např. Marketing Specialist" required>
+          </div>
+
+          <div class="field">
+            <label for="email">E-mail</label>
+            <input id="email" type="email" placeholder="jmeno.prijmeni@capexus.cz" autocomplete="email" required>
+          </div>
+
+          <div class="field">
+            <label for="phone">Telefon</label>
+            <input id="phone" type="tel" placeholder="+420 725 352 863" autocomplete="tel" required>
+          </div>
+
+          <div class="field">
+            <label for="office">Kancelář</label>
+            <select id="office" required>
+              <option value="River Corner | Moulíkova 3286/1b | 150 00 Praha 5">River Corner | Moulíkova 3286/1b | 150 00 Praha 5</option>
+            </select>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="primary">Stáhnout podpis v HTM</button>
+            <button type="button" id="resetButton" class="secondary">Vymazat formulář</button>
+          </div>
+
+          <div id="status" class="status" aria-live="polite"></div>
+        </form>
+      </div>
+
+      <div class="card preview-card">
+        <div class="preview-head">Živý náhled podpisu</div>
+        <div class="preview-wrap">
+          <iframe id="preview" title="Náhled e-mailového podpisu"></iframe>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('signatureForm');
+    const preview = document.getElementById('preview');
+    const statusBox = document.getElementById('status');
+    const resetButton = document.getElementById('resetButton');
+    const fields = {
+      displayName: document.getElementById('displayName'),
+      jobTitle: document.getElementById('jobTitle'),
+      email: document.getElementById('email'),
+      phone: document.getElementById('phone'),
+      office: document.getElementById('office')
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function normalizePhoneDisplay(value) {
+      const trimmed = String(value || '').trim();
+      const digits = trimmed.replace(/\D/g, '');
+      if (digits.length === 9) return `+420 ${digits.slice(0,3)} ${digits.slice(3,6)} ${digits.slice(6,9)}`;
+      if (digits.length === 12 && digits.startsWith('420')) return `+420 ${digits.slice(3,6)} ${digits.slice(6,9)} ${digits.slice(9,12)}`;
+      return trimmed;
+    }
+
+    function normalizePhoneLink(value) {
+      const digits = String(value || '').replace(/\D/g, '');
+      if (digits.length === 9) return `+420${digits}`;
+      if (digits.length === 12 && digits.startsWith('420')) return `+${digits}`;
+      return String(value || '').replace(/[^\d+]/g, '');
+    }
+
+    function slugify(value) {
+      return String(value || 'zamestnanec')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'zamestnanec';
+    }
+
+    function getData(usePlaceholders = false) {
+      return {
+        displayName: fields.displayName.value.trim() || (usePlaceholders ? 'Ing. Michaela Bursíková' : ''),
+        jobTitle: fields.jobTitle.value.trim() || (usePlaceholders ? 'Marketing Specialist' : ''),
+        email: fields.email.value.trim() || (usePlaceholders ? 'michaela.bursikova@capexus.cz' : ''),
+        phoneDisplay: normalizePhoneDisplay(fields.phone.value.trim() || (usePlaceholders ? '+420 725 352 863' : '')),
+        phoneLink: normalizePhoneLink(fields.phone.value.trim() || (usePlaceholders ? '+420 725 352 863' : '')),
+        office: fields.office.value
+      };
+    }
+
+    function buildSignatureHtml(data) {
+      const contentSlug = slugify(data.displayName);
+      const websiteUrl = 'https://www.capexus.cz/?utm_source=email-signature&amp;utm_medium=email&amp;utm_campaign=corporate-signature&amp;utm_content=' + encodeURIComponent(contentSlug);
+      const podcastUrl = 'https://www.capexus.cz/podcast?utm_source=email-signature&amp;utm_medium=email&amp;utm_campaign=corporate-signature&amp;utm_content=' + encodeURIComponent(contentSlug);
+
+      return `<!DOCTYPE html>
+<html lang="cs">
+<head><meta charset="UTF-8"><title>CAPEXUS Corporate Signature</title></head>
+<body style="margin:0; padding:0; background:#ffffff;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:620px; background:#ffffff; font-family:Aptos, Calibri, Arial, sans-serif; color:#333333;">
+<tr><td style="padding:40px 0 32px 44px; vertical-align:top;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+
+<td style="padding:0; vertical-align:top;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="font-family:Aptos, Calibri, Arial, sans-serif;">
+<tr><td style="padding:0; font-size:20px; line-height:24px; font-weight:600; color:#222222; letter-spacing:0.1px;">${escapeHtml(data.displayName)}</td></tr>
+<tr><td style="padding:5px 0 0 0; font-size:13px; line-height:17px; font-weight:400; color:#00ABC8; text-transform:uppercase; letter-spacing:0.5px;">${escapeHtml(data.jobTitle.toUpperCase())}</td></tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px; font-family:Aptos, Calibri, Arial, sans-serif;">
+<tr><td style="padding:0; font-size:12px; line-height:19px; color:#333333;">
+<a href="mailto:${escapeHtml(data.email)}" style="color:#333333; text-decoration:none;">${escapeHtml(data.email)}</a><br>
+<a href="tel:${escapeHtml(data.phoneLink)}" style="color:#333333; text-decoration:none;">${escapeHtml(data.phoneDisplay)}</a>
+</td></tr></table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px; font-family:Aptos, Calibri, Arial, sans-serif;"><tr><td style="padding:0; font-size:12px; line-height:19px;"><a href="${websiteUrl}" target="_blank" style="color:#00ABC8; text-decoration:none;">www.capexus.cz</a></td></tr></table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px; font-family:Aptos, Calibri, Arial, sans-serif;"><tr><td style="padding:0; font-size:12px; line-height:19px; color:#333333; white-space:nowrap;">${escapeHtml(data.office)}</td></tr></table>
+</td></tr></table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;"><tr><td style="padding:0;"><a href="${websiteUrl}" target="_blank" style="text-decoration:none; border:0;"><img src="https://capexus.github.io/signature-generator/logo-signature.png" width="200" alt="CAPEXUS člen ČEZ ESCO" style="display:block; width:200px; height:auto; border:0; outline:none; text-decoration:none;"></a></td></tr></table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:13px;"><tr><td style="padding:0; font-family:Aptos, Calibri, Arial, sans-serif; font-size:11px; line-height:16px;"><a href="${podcastUrl}" target="_blank" style="color:#00ABC8; text-decoration:none;">Poslechněte si náš podcast →</a></td></tr></table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;"><tr><td width="450" style="width:450px; padding:0; font-family:Aptos, Calibri, Arial, sans-serif; font-size:9px; line-height:13px; color:#8A8A8A; font-weight:400;">Tento e-mail není návrhem na uzavření smlouvy ani jeho přijetím. Společnost CAPEXUS s.r.o. vylučuje předsmluvní odpovědnost a projevuje vůli být vázána výhradně smlouvou v písemné formě, za níž se pro tento účel nepovažuje výměna e-mailových či jiných elektronických zpráv.<br><br>Tento e-mail je určen výhradně pro potřeby adresáta/ů a může obsahovat důvěrné informace. Pokud Vám byl omylem doručen, uvědomte okamžitě odesílatele vrácením e-mailu, zdržte se kopírování a jakéhokoli dalšího šíření e-mailu nebo jeho příloh a celý e-mail vymažte ze svého informačního systému. Nakládáním s neoprávněně získanými informacemi se vystavujete riziku právního postihu.</td></tr></table>
+</td></tr></table>
+</body></html>`;
+    }
+
+    function updatePreview() {
+      preview.srcdoc = buildSignatureHtml(getData(true));
+      statusBox.textContent = '';
+      statusBox.className = 'status';
+    }
+
+    function validateForm() {
+      if (!fields.displayName.value.trim()) return 'Vyplňte prosím jméno a titul.';
+      if (!fields.jobTitle.value.trim()) return 'Vyplňte prosím pracovní pozici.';
+      if (!fields.email.value.trim() || !fields.email.checkValidity()) return 'Vyplňte prosím platnou e-mailovou adresu.';
+      if (!fields.email.value.trim().toLowerCase().endsWith('@capexus.cz')) return 'Použijte prosím firemní e-mail ve formátu @capexus.cz.';
+      const phoneDigits = fields.phone.value.replace(/\D/g, '');
+      if (phoneDigits.length !== 9 && !(phoneDigits.length === 12 && phoneDigits.startsWith('420'))) return 'Telefon zadejte jako 9 číslic nebo ve formátu +420 123 456 789.';
+      return '';
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const error = validateForm();
+      if (error) {
+        statusBox.textContent = error;
+        statusBox.className = 'status error';
+        return;
+      }
+      const data = getData(false);
+      const html = buildSignatureHtml(data);
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `CAPEXUS_podpis_${slugify(data.displayName)}.htm`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      statusBox.textContent = 'Podpis byl vytvořen a stažen do počítače.';
+      statusBox.className = 'status success';
+    });
+
+    resetButton.addEventListener('click', () => {
+      form.reset();
+      updatePreview();
+      fields.displayName.focus();
+    });
+
+    Object.values(fields).forEach((field) => {
+      field.addEventListener('input', updatePreview);
+      field.addEventListener('change', updatePreview);
+    });
+
+    updatePreview();
+  </script>
+</body>
+</html>
